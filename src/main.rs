@@ -312,9 +312,7 @@ mod htmx {
         /// the client is badly behaved or someone is manually injecting headers. Then they get
         /// what they deserve (undefined client side behavior)
         fn try_from(value: HeaderMap) -> Result<Self, Self::Error> {
-            if !value.contains_key("HX-Request") {
-                Err(anyhow!("HX-Request header is missing"))?
-            } else {
+            if value.get("HX-Request").is_some_and(|x| x.eq("true")) {
                 let mut out = HtmxContext{
                     is_boost: value.get("HX-Boosted").is_some_and(|x| x.eq("true")),
                     ..HtmxContext::default()
@@ -332,6 +330,8 @@ mod htmx {
                     out.current_url = Some(Url::from_str(r.to_str()?)?);
                 }
                 Ok(out)
+            } else {
+                Err(anyhow!("HX-Request header is missing"))?
             }
         }
     }
