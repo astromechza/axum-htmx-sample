@@ -1,11 +1,12 @@
 # axum-htmx-sample
 
-A sample in Rust using axum and htmx to reduce bytes transferred for simpler html sites with progressive enhancement.
+A sample in Rust using [axum](https://docs.rs/axum/latest/axum/) and [HTMX](https://htmx.org/) to reduce bytes 
+transferred for simpler HTML sites with progressive enhancement.
 
-Although HTMX _can_ be much more complicated, this example works on a few basic principles:
+Although HTMX _can_ be much more complicated, this example works on a few principles:
 
 1. Use `hx-boost="true"` by default. This applies to all the GET links and POST form and simplifies their definition.
-2. The POST form demonstrates validation and success messages in a simple way which works fine for the basic use-case
+2. The POST form demonstrates validation and success messages in a way which works ok for this use-case
    but can be more complicated with partial out-of-band swaps if the page is expensive to render in the future.
 3. Progressive enhancement that works with javascript disabled entirely.
 

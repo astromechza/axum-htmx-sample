@@ -28,6 +28,7 @@ async fn main_err() -> Result<(), anyhow::Error> {
         // on the form display.
         .route("/form-example", get(form_example))
         .route("/form-example", post(form_example_submit))
+        .route("/favicon.svg", get(favicon_svg_handler))
         // the fallback applies for 405 and 404
         .fallback(not_found_handler);
     let listener = tokio::net::TcpListener::bind("0.0.0.0:9000").await?;
@@ -50,16 +51,18 @@ struct ResponseError {
 impl IntoResponse for ResponseError {
     fn into_response(self) -> Response {
         render_body_html_or_htmx(StatusCode::INTERNAL_SERVER_ERROR, "Internal Error", html! {
-            header {
-                (render_nav_links())
-                h1 { "Internal error" }
-            }
-            section {
-                p {
-                    "An internal error has occurred. Please navigate back using the links above."
+            main class="container" {
+                header {
+                    (render_nav_links())
+                    h1 { "Internal error" }
                 }
-                code {
-                    (self.err)
+                section {
+                    p {
+                        "An internal error has occurred. Please navigate back using the links above."
+                    }
+                    code {
+                        (self.err)
+                    }
                 }
             }
         }, self.htmx_context)
@@ -85,6 +88,21 @@ fn render_body_html(title: impl AsRef<str>, inner: Markup) -> Markup {
         html {
             head {
                 title { (title.as_ref()) }
+                style {
+                    r#"
+                        /**
+                         * Minified by jsDelivr using clean-css v5.3.2.
+                         * Original file: /npm/modern-normalize@3.0.1/modern-normalize.css
+                         *
+                         * Do NOT use SRI with dynamically generated files! More information: https://www.jsdelivr.com/using-sri-with-dynamic-files
+                         */
+                        /*! modern-normalize v3.0.1 | MIT License | https://github.com/sindresorhus/modern-normalize */
+                        *,::after,::before{box-sizing:border-box}html{font-family:system-ui,'Segoe UI',Roboto,Helvetica,Arial,sans-serif,'Apple Color Emoji','Segoe UI Emoji';line-height:1.15;-webkit-text-size-adjust:100%;tab-size:4}body{margin:0}b,strong{font-weight:bolder}code,kbd,pre,samp{font-family:ui-monospace,SFMono-Regular,Consolas,'Liberation Mono',Menlo,monospace;font-size:1em}small{font-size:80%}sub,sup{font-size:75%;line-height:0;position:relative;vertical-align:baseline}sub{bottom:-.25em}sup{top:-.5em}table{border-color:currentcolor}button,input,optgroup,select,textarea{font-family:inherit;font-size:100%;line-height:1.15;margin:0}[type=button],[type=reset],[type=submit],button{-webkit-appearance:button}legend{padding:0}progress{vertical-align:baseline}::-webkit-inner-spin-button,::-webkit-outer-spin-button{height:auto}[type=search]{-webkit-appearance:textfield;outline-offset:-2px}::-webkit-search-decoration{-webkit-appearance:none}::-webkit-file-upload-button{-webkit-appearance:button;font:inherit}summary{display:list-item}
+                        /*# sourceMappingURL=/sm/d2d8cd206fb9f42f071e97460f3ad9c875edb5e7a4b10f900a83cdf8401c53a9.map */
+                    "#
+                }
+                link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/milligram/1.4.1/milligram.min.css" integrity="sha512-xiunq9hpKsIcz42zt0o2vCo34xV0j6Ny8hgEylN3XBglZDtTZ2nwnqF/Z/TTCc18sGdvCjbFInNd++6q3J0N6g==" crossorigin="anonymous" referrerpolicy="no-referrer";
+                link rel="shortcut icon" type="image/svg" href="/favicon.svg";
                 script src="https://cdnjs.cloudflare.com/ajax/libs/htmx/2.0.4/htmx.min.js" integrity="sha512-2kIcAizYXhIn8TzUvqzEDZNuDZ+aW7yE/+f1HJHXFjQcGNfv1kqzJSTBRBSlOgp6B/KZsz1K0a3ZTqP9dnxioQ==" crossorigin="anonymous" referrerpolicy="no-referrer" {};
             }
             body hx-boost="true" id="body" {
@@ -98,6 +116,7 @@ fn render_body_html(title: impl AsRef<str>, inner: Markup) -> Markup {
 fn render_body_html_or_htmx(code: StatusCode, title: impl AsRef<str>, inner: Markup, htmx_context: Option<HtmxContext>) -> Response {
     let mut hm = HeaderMap::new();
     hm.insert("Content-Type", HeaderValue::from_static("text/html"));
+    hm.insert("Vary", HeaderValue::from_static("HX-Request"));
     if let Some(hc) = htmx_context {
         // Ensure that we retarget the request if it's attempting to swap to the wrong place.
         if hc.target.is_some_and(|x| x.ne("#body")) {
@@ -131,16 +150,28 @@ fn render_nav_links() -> Markup {
 
 async fn home_handler(headers: HeaderMap) -> Result<Response, ResponseError> {
     Ok(render_body_html_or_htmx(StatusCode::OK, "Home page", html! {
-        header {
-            (render_nav_links())
-            h1 { "Home" }
-        }
-        section {
-            p {
-                "This is the home page."
+        main class="container" {
+            header {
+                (render_nav_links())
+                h1 { "Home" }
+            }
+            section {
+                p {
+                    "This is the home page."
+                }
             }
         }
     }, HtmxContext::try_from(headers).ok()).into_response())
+}
+
+async fn favicon_svg_handler() -> Result<Response, ResponseError> {
+    let mut hm = HeaderMap::new();
+    hm.insert("Content-Type", HeaderValue::from_static("image/svg+xml"));
+    Ok((StatusCode::OK, hm, r#"
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+      <rect width="100" height="100" fill="black"/>
+    </svg>
+    "#).into_response())
 }
 
 async fn fallible_handler(headers: HeaderMap) -> Result<Response, ResponseError> {
@@ -152,13 +183,15 @@ async fn fallible_handler(headers: HeaderMap) -> Result<Response, ResponseError>
     }
 
     Ok(render_body_html_or_htmx(StatusCode::OK, "Lucky!", html! {
-        header {
-            (render_nav_links())
-            h1 { "Lucky you" }
-        }
-        section {
-            p {
-                "You were lucky!"
+        main class="container" {
+            header {
+                (render_nav_links())
+                h1 { "Lucky you" }
+            }
+            section {
+                p {
+                    "You were lucky!"
+                }
             }
         }
     }, htmx_context).into_response())
@@ -174,26 +207,28 @@ async fn form_example(headers: HeaderMap) -> Result<Response, ResponseError> {
 /// The page body of the form page. We use this in a few places.
 fn form_example_body(success_message: Option<String>, previous_error: Option<String>, previous_payload: FormExamplePayload) -> Markup {
     html! {
-        header {
-            (render_nav_links())
-            h1 { "Example form" }
-        }
-        section {
-            @if let Some(success_message) = success_message {
-                div {
-                    strong { "Success" }
-                    p { (success_message) }
-                }
+        main class="container" {
+            header {
+                (render_nav_links())
+                h1 { "Example form" }
             }
-            @if let Some(previous_error) = previous_error {
-                div {
-                    strong { "Error" }
-                    p { (previous_error) }
+            section {
+                @if let Some(success_message) = success_message {
+                    div {
+                        strong { "Success" }
+                        p { (success_message) }
+                    }
                 }
-            }
-            form action="/form-example" method="post" {
-                input type="text" name="content" value=(previous_payload.content);
-                button type="submit" { "Submit" }
+                @if let Some(previous_error) = previous_error {
+                    div {
+                        strong { "Error" }
+                        p { (previous_error) }
+                    }
+                }
+                form action="/form-example" method="post" {
+                    input type="text" name="content" value=(previous_payload.content);
+                    button type="submit" { "Submit" }
+                }
             }
         }
     }
@@ -228,17 +263,26 @@ async fn form_example_submit(headers: HeaderMap, Form(payload): Form<FormExample
 }
 
 async fn not_found_handler(method: Method, uri: Uri, headers: HeaderMap) -> Result<Response, ResponseError> {
+    let accept_html = headers.get("Accept")
+        .and_then(|raw| raw.to_str().ok().map(|ct| ct.contains("text/html") || ct.contains("*/*")))
+        .unwrap_or(true);
+    if !accept_html {
+        return Ok(StatusCode::NOT_FOUND.into_response());
+    }
+
     Ok(render_body_html_or_htmx(StatusCode::OK, "Not found", html! {
-        header {
-            (render_nav_links())
-            h1 { "Not Found" }
-        }
-        section {
-            p {
-                code { (method.as_str()) }
-                " "
-                code { (uri.path()) }
-                " not found"
+        main class="container" {
+            header {
+                (render_nav_links())
+                h1 { "Not Found" }
+            }
+            section {
+                p {
+                    code { (method.as_str()) }
+                    " "
+                    code { (uri.path()) }
+                    " not found"
+                }
             }
         }
     }, HtmxContext::try_from(headers).ok()))
