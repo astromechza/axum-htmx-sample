@@ -96,8 +96,9 @@ fn render_body_html(title: impl AsRef<str>, inner: Markup) -> Markup {
 
 /// Renders either the whole main html, or returns just the content suitable for swapping into the main element.
 fn render_body_html_or_htmx(code: StatusCode, title: impl AsRef<str>, inner: Markup, htmx_context: Option<HtmxContext>) -> Response {
+    let mut hm = HeaderMap::new();
+    hm.insert("Content-Type", HeaderValue::from_static("text/html"));
     if let Some(hc) = htmx_context {
-        let mut hm = HeaderMap::new();
         // Ensure that we retarget the request if it's attempting to swap to the wrong place.
         if hc.target.is_some_and(|x| x.ne("#body")) {
             hm.insert("HX-Retarget", HeaderValue::from_static("#body"));
@@ -107,9 +108,9 @@ fn render_body_html_or_htmx(code: StatusCode, title: impl AsRef<str>, inner: Mar
         (StatusCode::OK, hm, html! {
             title { (title.as_ref()) }
             (inner)
-        }).into_response()
+        }.0).into_response()
     } else {
-        (code, render_body_html(title, inner)).into_response()
+        (code, hm, render_body_html(title, inner).0).into_response()
     }
 }
 
@@ -144,7 +145,7 @@ async fn home_handler(headers: HeaderMap) -> Result<Response, ResponseError> {
 
 async fn fallible_handler(headers: HeaderMap) -> Result<Response, ResponseError> {
     let htmx_context = HtmxContext::try_from(headers).ok();
-    
+
     // Produce an error response sometimes.
     if rand::random::<bool>() {
         Err(anyhow!("request was unlucky")).map_resp_err(htmx_context.clone())?
